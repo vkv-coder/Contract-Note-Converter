@@ -6,62 +6,124 @@
 <title>Contract Note Converter</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-  body { background: #f2f4f7; padding: 24px 16px; }
-  .wrap { max-width: 720px; margin: 0 auto; }
-  .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
-  h2 { color: #222; margin-bottom: 8px; }
-  p { color: #555; font-size: 14px; line-height: 1.5; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .topbar button { padding: 8px 14px; background: #eee; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  body { background: #eef1f6; }
+
+  .header {
+    background: linear-gradient(135deg, #305496, #1e3a6e);
+    color: #fff;
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .header .title { display: flex; align-items: center; gap: 10px; }
+  .header .title .icon { font-size: 24px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .userline { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+  .header button {
+    padding: 8px 14px; background: rgba(255,255,255,0.15); color: #fff;
+    border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .header button:hover { background: rgba(255,255,255,0.25); }
+
+  .tabs {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 14px 10px; cursor: pointer;
+    font-size: 14px; font-weight: 600; color: #888; border-bottom: 3px solid transparent;
+  }
+  .tab.active { color: #305496; border-bottom-color: #305496; }
+
+  .content { max-width: 720px; margin: 0 auto; padding: 20px 16px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 22px; margin-bottom: 18px; }
+  h2 { color: #222; margin-bottom: 8px; font-size: 17px; }
+  p { color: #555; font-size: 13.5px; line-height: 1.6; }
+  .note-box {
+    background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px;
+    padding: 12px 14px; margin-top: 12px; font-size: 13px; color: #7a5c00; line-height: 1.6;
+  }
+  .note-box b { color: #5c4400; }
+
   label { display: block; margin-top: 14px; font-size: 14px; color: #444; font-weight: bold; }
-  .radio-row { margin-top: 8px; font-weight: normal; font-size: 14px; }
+  .radio-row { margin-top: 8px; font-size: 14px; }
   .radio-row label { display: inline-block; margin-right: 20px; font-weight: normal; }
-  input[type=file] { width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
-  button.primary { margin-top: 18px; padding: 12px 20px; background: #305496; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
-  button.primary:disabled { background: #999; cursor: not-allowed; }
-  button.download { margin-top: 10px; padding: 12px 20px; background: #2e7d32; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
-  .msg { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 13px; display: none; white-space: pre-line; }
+  input[type=file] { width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 13px; background: #fafafa; }
+
+  button.primary { margin-top: 18px; padding: 13px 20px; background: #305496; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }
+  button.primary:disabled { background: #aaa; cursor: not-allowed; }
+  button.download { margin-top: 10px; padding: 13px 20px; background: #2e7d32; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; }
+
+  .msg { margin-top: 16px; padding: 12px 14px; border-radius: 8px; font-size: 13px; display: none; white-space: pre-line; }
   .msg.error { background: #fdeaea; color: #b00020; display: block; }
   .msg.success { background: #e8f5e9; color: #1b5e20; display: block; }
   .msg.info { background: #e3f2fd; color: #0d47a1; display: block; }
+
   table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; }
   th { color: #666; font-size: 11px; text-transform: uppercase; background: #f8f8f8; }
-  .summary { font-size: 13px; color: #444; margin-top: 10px; }
+  .summary { font-size: 14px; color: #333; margin-top: 4px; font-weight: 600; }
+  .stat-row { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 100px; background: #f5f7fb; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat .num { font-size: 20px; font-weight: 700; color: #305496; }
+  .stat .lbl { font-size: 11px; color: #777; margin-top: 2px; }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <div class="card">
-    <div class="topbar">
-      <h2 id="pageTitle">Contract Note Converter</h2>
-      <button onclick="logout()">Log Out</button>
+<div class="header">
+  <div class="title">
+    <span class="icon">📊</span>
+    <div>
+      <h1>Contract Note Converter</h1>
+      <div class="userline" id="userLine">Loading...</div>
     </div>
-    <p id="userLine"></p>
+  </div>
+  <button onclick="logout()">Log Out</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tabUpload" onclick="switchTab('upload')">Upload</div>
+  <div class="tab" id="tabHistory" onclick="switchTab('history')">History</div>
+</div>
+
+<div class="content">
+
+  <div class="panel active" id="panelUpload">
+    <div class="card">
+      <h2>Upload Contract Notes</h2>
+      <p>Formats detected automatically: Zerodha, Mirae Asset / mStock, Axis / Gopani.</p>
+
+      <div class="note-box">
+        <b>Password-protected PDF?</b> Open the file once and enter the password. Then choose <b>Print</b> → in the printer selection choose <b>Save as PDF</b> → upload that saved file here instead.
+      </div>
+
+      <label>How many files?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="uploadMode" value="single" checked> Single file</label>
+        <label><input type="radio" name="uploadMode" value="multiple"> Multiple files</label>
+      </div>
+
+      <input type="file" id="fileInput" accept=".pdf,.html,.htm">
+
+      <button class="primary" id="processBtn" onclick="processFiles()">Process & Save</button>
+      <div class="msg" id="msgBox"></div>
+    </div>
   </div>
 
-  <div class="card" id="uploadCard">
-    <h2>Upload Contract Notes</h2>
-    <p>Supported formats detected automatically: Zerodha, Mirae Asset / mStock, Axis / Gopani. Password-protected PDFs must be unlocked before uploading.</p>
-
-    <label>How many files?</label>
-    <div class="radio-row">
-      <label><input type="radio" name="uploadMode" value="single" checked> Single file</label>
-      <label><input type="radio" name="uploadMode" value="multiple"> Multiple files</label>
+  <div class="panel" id="panelHistory">
+    <div class="card">
+      <h2>Your Full History</h2>
+      <div class="stat-row" id="statRow"></div>
+      <button class="download" onclick="downloadExcel()">Download Excel (Full History)</button>
     </div>
-
-    <input type="file" id="fileInput" accept=".pdf,.html,.htm">
-
-    <button class="primary" id="processBtn" onclick="processFiles()">Process & Save</button>
-    <div class="msg" id="msgBox"></div>
-  </div>
-
-  <div class="card" id="downloadCard" style="display:none;">
-    <h2>Your Full History</h2>
-    <div class="summary" id="summaryBox"></div>
-    <button class="download" onclick="downloadExcel()">Download Excel (Full History)</button>
-    <div id="previewTable"></div>
   </div>
 
 </div>
@@ -95,6 +157,13 @@ const msgBox = document.getElementById("msgBox");
 function showMsg(text, type) {
   msgBox.textContent = text;
   msgBox.className = "msg " + type;
+}
+
+function switchTab(name) {
+  document.getElementById('tabUpload').classList.toggle('active', name === 'upload');
+  document.getElementById('tabHistory').classList.toggle('active', name === 'history');
+  document.getElementById('panelUpload').classList.toggle('active', name === 'upload');
+  document.getElementById('panelHistory').classList.toggle('active', name === 'history');
 }
 
 document.querySelectorAll('input[name=uploadMode]').forEach(r => {
@@ -319,7 +388,7 @@ async function processOneFile(file) {
 
 // ---------- Capital gain FIFO across full history ----------
 function computeCapitalGains(allEntries) {
-  const lots = {}; // isin -> [{qty, cost}]
+  const lots = {};
   const sorted = allEntries
     .filter(e => e.buy_sell === 'BUY' || e.buy_sell === 'SELL')
     .slice()
@@ -361,6 +430,10 @@ function computeCapitalGains(allEntries) {
   return allEntries;
 }
 
+function entryKey(e) {
+  return [e.trade_date, e.isin, e.buy_sell, e.quantity, e.net_amount, e.source_file].join('|');
+}
+
 // ---------- Main flow ----------
 let sessionToken = null;
 let fullHistory = [];
@@ -373,7 +446,7 @@ async function init() {
     const result = await callRpc('cn_check_session', { p_token: sessionToken });
     if (!result.success) { localStorage.removeItem('cn_token'); window.location.href = 'index.html'; return; }
     if (result.status !== 'approved') { window.location.href = 'pending.html'; return; }
-    document.getElementById('userLine').textContent = 'Logged in as ' + result.email;
+    document.getElementById('userLine').textContent = result.email;
     await loadHistory();
   } catch (err) {
     showMsg('Error: ' + err.message, 'error');
@@ -384,22 +457,21 @@ async function loadHistory() {
   const result = await callRpc('cn_get_transactions', { p_token: sessionToken });
   if (!result.success) { showMsg(result.message, 'error'); return; }
   fullHistory = result.transactions || [];
-  renderSummary();
+  renderStats();
 }
 
-function renderSummary() {
-  const downloadCard = document.getElementById('downloadCard');
-  const summaryBox = document.getElementById('summaryBox');
-  if (!fullHistory.length) {
-    downloadCard.style.display = 'none';
-    return;
-  }
-  downloadCard.style.display = 'block';
-  summaryBox.textContent = fullHistory.length + ' total transaction row(s) saved in your account.';
-}
-
-function entryKey(e) {
-  return [e.trade_date, e.isin, e.buy_sell, e.quantity, e.net_amount, e.source_file].join('|');
+function renderStats() {
+  const statRow = document.getElementById('statRow');
+  const buys = fullHistory.filter(e => e.buy_sell === 'BUY').length;
+  const sells = fullHistory.filter(e => e.buy_sell === 'SELL').length;
+  const gainRows = fullHistory.filter(e => e.capital_gain !== null && e.capital_gain !== undefined);
+  const totalGain = gainRows.reduce((s, e) => s + Number(e.capital_gain), 0);
+  statRow.innerHTML = `
+    <div class="stat"><div class="num">${fullHistory.length}</div><div class="lbl">Total Rows</div></div>
+    <div class="stat"><div class="num">${buys}</div><div class="lbl">Buys</div></div>
+    <div class="stat"><div class="num">${sells}</div><div class="lbl">Sells</div></div>
+    <div class="stat"><div class="num">₹${totalGain.toFixed(2)}</div><div class="lbl">Realized Gain</div></div>
+  `;
 }
 
 async function processFiles() {
