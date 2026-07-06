@@ -154,23 +154,40 @@ function findFinalNetAmount(text) {
 
 function extractIsinRowsFromLines(lines) {
   const rows = [];
+  const numRe = /^[\(\-−]?[\d,]+(\.\d+)?\)?$/;
   for (const line of lines) {
     const tokens = line.trim().split(/\s+/);
-    if (tokens.length < 14) continue;
+    if (tokens.length < 6) continue;
     if (!ISIN_RE.test(tokens[0])) continue;
-    const numTokens = tokens.slice(-12);
-    const allNumeric = numTokens.every(t => /^[\(\-−]?[\d,]+(\.\d+)?\)?$/.test(t));
-    if (!allNumeric) continue;
-    const name = tokens.slice(1, tokens.length - 12).join(' ');
-    rows.push({
-      isin: tokens[0],
-      name: name,
-      buyQty: parseNum(numTokens[0]),
-      totalBuyValue: parseNum(numTokens[4]),
-      sellQty: parseNum(numTokens[5]),
-      totalSellValue: parseNum(numTokens[9]),
-      netObligation: parseNum(numTokens[11])
-    });
+
+    let splitIdx = tokens.length;
+    for (let i = tokens.length - 1; i >= 1; i--) {
+      if (numRe.test(tokens[i])) splitIdx = i;
+      else break;
+    }
+    const numTokens = tokens.slice(splitIdx);
+    const name = tokens.slice(1, splitIdx).join(' ');
+    if (numTokens.length !== 12 && numTokens.length !== 6) continue;
+
+    const parsed = numTokens.map(parseNum);
+
+    if (parsed.length === 12) {
+      rows.push({
+        isin: tokens[0], name,
+        buyQty: parsed[0], totalBuyValue: parsed[4],
+        sellQty: parsed[5], totalSellValue: parsed[9],
+        netObligation: parsed[11]
+      });
+    } else {
+      const qty = parsed[0];
+      const totalValue = parsed[3];
+      const netObligation = parsed[5];
+      if (netObligation < 0) {
+        rows.push({ isin: tokens[0], name, buyQty: qty, totalBuyValue: totalValue, sellQty: 0, totalSellValue: 0, netObligation });
+      } else {
+        rows.push({ isin: tokens[0], name, buyQty: 0, totalBuyValue: 0, sellQty: qty, totalSellValue: totalValue, netObligation });
+      }
+    }
   }
   return rows;
 }
