@@ -13,6 +13,7 @@
   input { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
   button { width: 100%; margin-top: 22px; padding: 12px; background: #305496; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
   button:hover { background: #244070; }
+  button:disabled { background: #999; cursor: not-allowed; }
   .toggle { text-align: center; margin-top: 16px; font-size: 14px; }
   .toggle a { color: #305496; cursor: pointer; text-decoration: underline; }
   .msg { margin-top: 14px; padding: 10px; border-radius: 6px; font-size: 13px; display: none; }
@@ -24,7 +25,7 @@
 
 <div class="card">
   <h2 id="formTitle">Log In</h2>
-  <form id="authForm">
+  <form id="authForm" novalidate>
     <label>Email</label>
     <input type="email" id="email" required>
     <label>Password</label>
@@ -37,19 +38,23 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+window.addEventListener("error", function (e) {
+  var box = document.getElementById("msgBox");
+  if (box) {
+    box.textContent = "A technical error occurred: " + e.message;
+    box.className = "msg error";
+  }
+});
+
 const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-let mode = "login"; // or "signup"
 
 const form = document.getElementById("authForm");
 const formTitle = document.getElementById("formTitle");
 const submitBtn = document.getElementById("submitBtn");
 const toggleText = document.getElementById("toggleText");
-const toggleLink = document.getElementById("toggleLink");
 const msgBox = document.getElementById("msgBox");
 
 function showMsg(text, type) {
@@ -57,67 +62,94 @@ function showMsg(text, type) {
   msgBox.className = "msg " + type;
 }
 
-function handleToggleClick() {
-  mode = mode === "login" ? "signup" : "login";
-  if (mode === "signup") {
-    formTitle.textContent = "Sign Up";
-    submitBtn.textContent = "Sign Up";
-    toggleText.innerHTML = 'Already have an account? <a id="toggleLink">Log In</a>';
-  } else {
-    formTitle.textContent = "Log In";
-    submitBtn.textContent = "Log In";
-    toggleText.innerHTML = 'Don\'t have an account? <a id="toggleLink">Sign Up</a>';
+if (!window.supabase || !window.supabase.createClient) {
+  showMsg("Could not load required library. Please check your internet connection and refresh the page.", "error");
+} else {
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let mode = "login";
+
+  function attachToggleHandler() {
+    const link = document.getElementById("toggleLink");
+    link.addEventListener("click", handleToggleClick);
   }
-  document.getElementById("toggleLink").addEventListener("click", handleToggleClick);
-  msgBox.className = "msg";
-}
-toggleLink.addEventListener("click", handleToggleClick);
 
-async function checkApprovalAndRedirect(userId) {
-  const { data, error } = await supabase
-    .from("cn_profiles")
-    .select("status")
-    .eq("id", userId)
-    .single();
-
-  if (error || !data) {
-    showMsg("Could not verify account status. Please try again.", "error");
-    return;
-  }
-  if (data.status === "approved") {
-    window.location.href = "app.html";
-  } else if (data.status === "pending") {
-    window.location.href = "pending.html";
-  } else {
-    showMsg("Your account access was rejected. Contact support: vkvcoder.support@gmail.com", "error");
-  }
-}
-
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const email = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value;
-  submitBtn.disabled = true;
-
-  if (mode === "signup") {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      showMsg(error.message, "error");
+  function handleToggleClick() {
+    mode = mode === "login" ? "signup" : "login";
+    if (mode === "signup") {
+      formTitle.textContent = "Sign Up";
+      submitBtn.textContent = "Sign Up";
+      toggleText.innerHTML = 'Already have an account? <a id="toggleLink">Log In</a>';
     } else {
-      showMsg("Account created! Waiting for admin approval.", "success");
-      setTimeout(() => window.location.href = "pending.html", 1200);
+      formTitle.textContent = "Log In";
+      submitBtn.textContent = "Log In";
+      toggleText.innerHTML = 'Don\'t have an account? <a id="toggleLink">Sign Up</a>';
     }
-  } else {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      showMsg(error.message, "error");
+    attachToggleHandler();
+    msgBox.className = "msg";
+  }
+  attachToggleHandler();
+
+  async function checkApprovalAndRedirect(userId) {
+    const { data, error } = await supabase
+      .from("cn_profiles")
+      .select("status")
+      .eq("id", userId)
+      .single();
+
+    if (error || !data) {
+      showMsg("Could not verify account status: " + (error ? error.message : "no profile found"), "error");
+      return;
+    }
+    if (data.status === "approved") {
+      window.location.href = "app.html";
+    } else if (data.status === "pending") {
+      window.location.href = "pending.html";
     } else {
-      showMsg("Login successful. Checking approval status...", "success");
-      await checkApprovalAndRedirect(data.user.id);
+      showMsg("Your account access was rejected. Contact support: vkvcoder.support@gmail.com", "error");
     }
   }
-  submitBtn.disabled = false;
-});
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (!email || !password) {
+      showMsg("Please enter both email and password.", "error");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    showMsg("Please wait...", "success");
+
+    try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email: email, password: password });
+        if (error) {
+          showMsg(error.message, "error");
+        } else {
+          showMsg("Account created! Redirecting to approval page...", "success");
+          setTimeout(function () { window.location.href = "pending.html"; }, 1200);
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: password });
+        if (error) {
+          showMsg(error.message, "error");
+        } else {
+          showMsg("Login successful. Checking approval status...", "success");
+          await checkApprovalAndRedirect(data.user.id);
+        }
+      }
+    } catch (err) {
+      showMsg("Unexpected error: " + err.message, "error");
+    }
+
+    submitBtn.disabled = false;
+    return false;
+  });
+}
 </script>
 
 </body>
