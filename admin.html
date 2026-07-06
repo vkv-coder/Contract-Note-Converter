@@ -29,22 +29,22 @@
   <div class="card" id="content">Loading...</div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_EMAIL = "unigoods2026@gmail.com";
 const content = document.getElementById("content");
 
 async function loadUsers() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await sb.auth.getUser();
   if (!user || user.email !== ADMIN_EMAIL) {
     content.innerHTML = '<div class="denied">Access denied. This page is for admin use only.<br><br><a href="index.html">Go to Login</a></div>';
     return;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from("cn_profiles")
     .select("*")
     .order("created_at", { ascending: false });
@@ -80,8 +80,8 @@ async function loadUsers() {
 }
 
 async function updateStatus(userId, status) {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase
+  const { data: { user } } = await sb.auth.getUser();
+  const { error } = await sb
     .from("cn_profiles")
     .update({ status, approved_by: user.id, approved_at: new Date().toISOString() })
     .eq("id", userId);
