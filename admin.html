@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Approve Users</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+  body { background: #f2f4f7; padding: 30px 16px; }
+  .wrap { max-width: 800px; margin: 0 auto; }
+  h2 { color: #222; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+  th { color: #666; font-size: 12px; text-transform: uppercase; }
+  .status { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  .status.pending { background: #fff3cd; color: #856404; }
+  .status.approved { background: #d4edda; color: #155724; }
+  .status.rejected { background: #f8d7da; color: #721c24; }
+  button { padding: 7px 14px; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; margin-right: 6px; }
+  .approve { background: #2e7d32; color: #fff; }
+  .reject { background: #c62828; color: #fff; }
+  .denied { text-align: center; padding: 60px 20px; color: #b00020; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Admin Panel - User Approvals</h2>
+  <div class="card" id="content">Loading...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const ADMIN_EMAIL = "unigoods2026@gmail.com";
+const content = document.getElementById("content");
+
+async function loadUsers() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.email !== ADMIN_EMAIL) {
+    content.innerHTML = '<div class="denied">Access denied. This page is for admin use only.<br><br><a href="index.html">Go to Login</a></div>';
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("cn_profiles")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    content.innerHTML = "Error loading users: " + error.message;
+    return;
+  }
+
+  if (!data.length) {
+    content.innerHTML = "No users found.";
+    return;
+  }
+
+  let rows = data.map(u => `
+    <tr>
+      <td>${u.email}</td>
+      <td>${new Date(u.created_at).toLocaleDateString()}</td>
+      <td><span class="status ${u.status}">${u.status}</span></td>
+      <td>
+        ${u.status !== 'approved' ? `<button class="approve" onclick="updateStatus('${u.id}','approved')">Approve</button>` : ''}
+        ${u.status !== 'rejected' ? `<button class="reject" onclick="updateStatus('${u.id}','rejected')">Reject</button>` : ''}
+      </td>
+    </tr>
+  `).join("");
+
+  content.innerHTML = `
+    <table>
+      <tr><th>Email</th><th>Signed Up</th><th>Status</th><th>Action</th></tr>
+      ${rows}
+    </table>
+  `;
+}
+
+async function updateStatus(userId, status) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("cn_profiles")
+    .update({ status, approved_by: user.id, approved_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  if (error) {
+    alert("Error: " + error.message);
+  } else {
+    loadUsers();
+  }
+}
+
+loadUsers();
+</script>
+</body>
+</html>
