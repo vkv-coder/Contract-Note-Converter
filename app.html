@@ -6,21 +6,73 @@
 <title>Contract Note Converter</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-  body { background: #f2f4f7; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .card { background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); width: 100%; max-width: 420px; text-align: center; }
-  h2 { color: #2e7d32; margin-bottom: 14px; }
-  p { color: #555; font-size: 14px; line-height: 1.6; margin-bottom: 10px; }
-  .icon { font-size: 40px; margin-bottom: 14px; }
-  button { margin-top: 20px; padding: 10px 18px; background: #305496; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  body { background: #f2f4f7; padding: 24px 16px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+  h2 { color: #222; margin-bottom: 8px; }
+  p { color: #555; font-size: 14px; line-height: 1.5; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .topbar button { padding: 8px 14px; background: #eee; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  label { display: block; margin-top: 14px; font-size: 14px; color: #444; font-weight: bold; }
+  .radio-row { margin-top: 8px; font-weight: normal; font-size: 14px; }
+  .radio-row label { display: inline-block; margin-right: 20px; font-weight: normal; }
+  input[type=file] { width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  button.primary { margin-top: 18px; padding: 12px 20px; background: #305496; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  button.primary:disabled { background: #999; cursor: not-allowed; }
+  button.download { margin-top: 10px; padding: 12px 20px; background: #2e7d32; color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  .msg { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 13px; display: none; white-space: pre-line; }
+  .msg.error { background: #fdeaea; color: #b00020; display: block; }
+  .msg.success { background: #e8f5e9; color: #1b5e20; display: block; }
+  .msg.info { background: #e3f2fd; color: #0d47a1; display: block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+  th { color: #666; font-size: 11px; text-transform: uppercase; background: #f8f8f8; }
+  .summary { font-size: 13px; color: #444; margin-top: 10px; }
 </style>
 </head>
 <body>
-<div class="card" id="content">Checking your session...</div>
+<div class="wrap">
 
+  <div class="card">
+    <div class="topbar">
+      <h2 id="pageTitle">Contract Note Converter</h2>
+      <button onclick="logout()">Log Out</button>
+    </div>
+    <p id="userLine"></p>
+  </div>
+
+  <div class="card" id="uploadCard">
+    <h2>Upload Contract Notes</h2>
+    <p>Supported formats detected automatically: Zerodha, Mirae Asset / mStock, Axis / Gopani. Password-protected PDFs must be unlocked before uploading.</p>
+
+    <label>How many files?</label>
+    <div class="radio-row">
+      <label><input type="radio" name="uploadMode" value="single" checked> Single file</label>
+      <label><input type="radio" name="uploadMode" value="multiple"> Multiple files</label>
+    </div>
+
+    <input type="file" id="fileInput" accept=".pdf,.html,.htm">
+
+    <button class="primary" id="processBtn" onclick="processFiles()">Process & Save</button>
+    <div class="msg" id="msgBox"></div>
+  </div>
+
+  <div class="card" id="downloadCard" style="display:none;">
+    <h2>Your Full History</h2>
+    <div class="summary" id="summaryBox"></div>
+    <button class="download" onclick="downloadExcel()">Download Excel (Full History)</button>
+    <div id="previewTable"></div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
 const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
-const content = document.getElementById("content");
 
 async function callRpc(fnName, payload) {
   const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fnName, {
@@ -39,42 +91,364 @@ async function callRpc(fnName, payload) {
   return res.json();
 }
 
-async function init() {
-  const token = localStorage.getItem("cn_token");
-  if (!token) {
-    window.location.href = "index.html";
-    return;
+const msgBox = document.getElementById("msgBox");
+function showMsg(text, type) {
+  msgBox.textContent = text;
+  msgBox.className = "msg " + type;
+}
+
+document.querySelectorAll('input[name=uploadMode]').forEach(r => {
+  r.addEventListener('change', () => {
+    const mode = document.querySelector('input[name=uploadMode]:checked').value;
+    document.getElementById('fileInput').multiple = (mode === 'multiple');
+  });
+});
+
+// ---------- Parsing helpers ----------
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
+
+function parseNum(raw) {
+  if (raw === null || raw === undefined) return 0;
+  let s = String(raw).trim();
+  if (s === '' || s === '-') return 0;
+  let neg = false;
+  if (s.startsWith('(') && s.endsWith(')')) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/−/g, '-').replace(/,/g, '');
+  if (/CR$/i.test(s)) { s = s.slice(0, -2).trim(); }
+  else if (/DR$/i.test(s)) { s = s.slice(0, -2).trim(); neg = true; }
+  if (s.startsWith('-')) { neg = true; s = s.slice(1); }
+  const val = parseFloat(s);
+  if (isNaN(val)) return 0;
+  return neg ? -val : val;
+}
+
+function toIsoDate(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().split('T')[0];
+}
+
+function findTradeDate(text) {
+  const m = text.match(/(?:Trade Date|TRADE DATE)\s*[:\-]?\s*([0-9]{1,2}[\/\-][0-9]{1,2}[\/\-][0-9]{2,4}|[A-Za-z]{3,9}\s+[0-9]{1,2}[,\s]+[0-9]{4})/);
+  if (!m) return null;
+  return toIsoDate(m[1]);
+}
+
+function findFinalNetAmount(text) {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const low = lines[i].toLowerCase();
+    if (low.includes('net amount') && (low.includes('payable') || low.includes('receivable'))) {
+      let searchText = lines[i];
+      let nums = searchText.match(/[\(\-−]?\d[\d,]*\.\d{2}\)?\s*(?:Cr|Dr)?/g);
+      if (!nums && i + 1 < lines.length) {
+        searchText = lines[i + 1];
+        nums = searchText.match(/[\(\-−]?\d[\d,]*\.\d{2}\)?\s*(?:Cr|Dr)?/g);
+      }
+      if (nums) return parseNum(nums[nums.length - 1]);
+    }
+  }
+  return null;
+}
+
+function extractIsinRowsFromLines(lines) {
+  const rows = [];
+  for (const line of lines) {
+    const tokens = line.trim().split(/\s+/);
+    if (tokens.length < 14) continue;
+    if (!ISIN_RE.test(tokens[0])) continue;
+    const numTokens = tokens.slice(-12);
+    const allNumeric = numTokens.every(t => /^[\(\-−]?[\d,]+(\.\d+)?\)?$/.test(t));
+    if (!allNumeric) continue;
+    const name = tokens.slice(1, tokens.length - 12).join(' ');
+    rows.push({
+      isin: tokens[0],
+      name: name,
+      buyQty: parseNum(numTokens[0]),
+      totalBuyValue: parseNum(numTokens[4]),
+      sellQty: parseNum(numTokens[5]),
+      totalSellValue: parseNum(numTokens[9]),
+      netObligation: parseNum(numTokens[11])
+    });
+  }
+  return rows;
+}
+
+async function extractPdfLines(arrayBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let allLines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const rowsByY = {};
+    content.items.forEach(item => {
+      const y = Math.round(item.transform[5] / 2) * 2;
+      if (!rowsByY[y]) rowsByY[y] = [];
+      rowsByY[y].push({ x: item.transform[4], str: item.str });
+    });
+    const ys = Object.keys(rowsByY).map(Number).sort((a, b) => b - a);
+    ys.forEach(y => {
+      const sorted = rowsByY[y].sort((a, b) => a.x - b.x);
+      const lineText = sorted.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+      if (lineText) allLines.push(lineText);
+    });
+  }
+  return allLines;
+}
+
+function getHtmlLines(htmlText) {
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  const out = [];
+  (function walk(node) {
+    if (node.nodeType === 3) {
+      const t = node.textContent.trim();
+      if (t) out.push(t);
+    } else if (node.nodeType === 1) {
+      for (const child of node.childNodes) walk(child);
+    }
+  })(doc.body);
+  return out;
+}
+
+function extractIsinRowsFromHtmlTables(htmlText) {
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  const rows = [];
+  doc.querySelectorAll('table').forEach(table => {
+    table.querySelectorAll('tr').forEach(tr => {
+      const cells = Array.from(tr.querySelectorAll('td,th')).map(td => td.textContent.trim());
+      if (cells.length >= 14 && ISIN_RE.test(cells[0])) {
+        rows.push({
+          isin: cells[0],
+          name: cells[1],
+          buyQty: parseNum(cells[2]),
+          totalBuyValue: parseNum(cells[6]),
+          sellQty: parseNum(cells[7]),
+          totalSellValue: parseNum(cells[11]),
+          netObligation: parseNum(cells[cells.length - 1])
+        });
+      }
+    });
+  });
+  return rows;
+}
+
+async function processOneFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  let lines, isinRows;
+
+  if (ext === 'pdf') {
+    const buf = await file.arrayBuffer();
+    lines = await extractPdfLines(buf);
+    isinRows = extractIsinRowsFromLines(lines);
+  } else if (ext === 'html' || ext === 'htm') {
+    const text = await file.text();
+    lines = getHtmlLines(text);
+    isinRows = extractIsinRowsFromHtmlTables(text);
+  } else {
+    return { entries: [], warning: 'Unsupported file type: ' + ext };
   }
 
+  if (!isinRows.length) {
+    return { entries: [], warning: 'Could not find any script rows — format not recognized. Please check manually.' };
+  }
+
+  const fullText = lines.join('\n');
+  const tradeDate = findTradeDate(fullText);
+  const finalAmount = findFinalNetAmount(fullText);
+
+  let sumNetObligation = 0;
+  const entries = [];
+  isinRows.forEach(r => {
+    sumNetObligation += r.netObligation;
+    if (r.buyQty > 0) {
+      entries.push({
+        trade_date: tradeDate, script_name: r.name, isin: r.isin,
+        buy_sell: 'BUY', quantity: r.buyQty, net_amount: -Math.abs(r.totalBuyValue),
+        source_file: file.name
+      });
+    }
+    if (r.sellQty > 0) {
+      entries.push({
+        trade_date: tradeDate, script_name: r.name, isin: r.isin,
+        buy_sell: 'SELL', quantity: r.sellQty, net_amount: Math.abs(r.totalSellValue),
+        source_file: file.name
+      });
+    }
+    if (r.buyQty === 0 && r.sellQty === 0) {
+      entries.push({
+        trade_date: tradeDate, script_name: r.name, isin: r.isin,
+        buy_sell: 'NIL', quantity: 0, net_amount: r.netObligation,
+        source_file: file.name
+      });
+    }
+  });
+
+  let charges = null;
+  if (finalAmount !== null) {
+    charges = Math.round(Math.abs(sumNetObligation - finalAmount) * 100) / 100;
+  }
+  if (entries.length) {
+    entries[0].charges = charges;
+    for (let i = 1; i < entries.length; i++) entries[i].charges = null;
+  }
+
+  let warning = null;
+  if (!tradeDate) warning = 'Trade date not found — please check this file manually.';
+  if (finalAmount === null) warning = (warning ? warning + ' ' : '') + 'Total charges not found — please check this file manually.';
+
+  return { entries, warning };
+}
+
+// ---------- Capital gain FIFO across full history ----------
+function computeCapitalGains(allEntries) {
+  const lots = {}; // isin -> [{qty, cost}]
+  const sorted = allEntries
+    .filter(e => e.buy_sell === 'BUY' || e.buy_sell === 'SELL')
+    .slice()
+    .sort((a, b) => (a.trade_date || '').localeCompare(b.trade_date || ''));
+
+  sorted.forEach(e => {
+    const isin = e.isin;
+    if (!lots[isin]) lots[isin] = [];
+    if (e.buy_sell === 'BUY') {
+      const costPerUnit = e.quantity ? Math.abs(e.net_amount) / e.quantity : 0;
+      lots[isin].push({ qty: e.quantity, cost: costPerUnit });
+      e.capital_gain = null;
+      e.remarks = null;
+    } else if (e.buy_sell === 'SELL') {
+      let qtyToSell = e.quantity;
+      let matchedCost = 0;
+      const queue = lots[isin];
+      while (qtyToSell > 0.0001 && queue.length) {
+        const lot = queue[0];
+        const take = Math.min(lot.qty, qtyToSell);
+        matchedCost += take * lot.cost;
+        lot.qty -= take;
+        qtyToSell -= take;
+        if (lot.qty <= 0.0001) queue.shift();
+      }
+      if (qtyToSell > 0.0001) {
+        e.capital_gain = null;
+        e.remarks = 'No matching buy found for ' + qtyToSell.toFixed(2) + ' shares (opening/unknown holding)';
+      } else {
+        e.capital_gain = Math.round((e.net_amount - matchedCost) * 100) / 100;
+        e.remarks = null;
+      }
+    }
+  });
+
+  allEntries.forEach(e => {
+    if (e.buy_sell === 'NIL') { e.capital_gain = null; e.remarks = null; }
+  });
+  return allEntries;
+}
+
+// ---------- Main flow ----------
+let sessionToken = null;
+let fullHistory = [];
+
+async function init() {
+  sessionToken = localStorage.getItem('cn_token');
+  if (!sessionToken) { window.location.href = 'index.html'; return; }
+
   try {
-    const result = await callRpc("cn_check_session", { p_token: token });
-    if (!result.success) {
-      localStorage.removeItem("cn_token");
-      window.location.href = "index.html";
-      return;
-    }
-    if (result.status !== "approved") {
-      window.location.href = "pending.html";
-      return;
-    }
-    content.innerHTML = `
-      <div class="icon">✅</div>
-      <h2>You're Approved!</h2>
-      <p>Logged in as ${result.email}</p>
-      <p>The upload and Excel download feature is coming in the next update.</p>
-      <button onclick="logout()">Log Out</button>
-    `;
+    const result = await callRpc('cn_check_session', { p_token: sessionToken });
+    if (!result.success) { localStorage.removeItem('cn_token'); window.location.href = 'index.html'; return; }
+    if (result.status !== 'approved') { window.location.href = 'pending.html'; return; }
+    document.getElementById('userLine').textContent = 'Logged in as ' + result.email;
+    await loadHistory();
   } catch (err) {
-    content.innerHTML = "Error: " + err.message;
+    showMsg('Error: ' + err.message, 'error');
   }
 }
 
+async function loadHistory() {
+  const result = await callRpc('cn_get_transactions', { p_token: sessionToken });
+  if (!result.success) { showMsg(result.message, 'error'); return; }
+  fullHistory = result.transactions || [];
+  renderSummary();
+}
+
+function renderSummary() {
+  const downloadCard = document.getElementById('downloadCard');
+  const summaryBox = document.getElementById('summaryBox');
+  if (!fullHistory.length) {
+    downloadCard.style.display = 'none';
+    return;
+  }
+  downloadCard.style.display = 'block';
+  summaryBox.textContent = fullHistory.length + ' total transaction row(s) saved in your account.';
+}
+
+async function processFiles() {
+  const fileInput = document.getElementById('fileInput');
+  const files = fileInput.files;
+  if (!files.length) { showMsg('Please choose at least one file.', 'error'); return; }
+
+  const processBtn = document.getElementById('processBtn');
+  processBtn.disabled = true;
+  showMsg('Processing ' + files.length + ' file(s)...', 'info');
+
+  let newEntries = [];
+  let warnings = [];
+
+  for (const file of Array.from(files)) {
+    try {
+      const { entries, warning } = await processOneFile(file);
+      if (warning) warnings.push(file.name + ': ' + warning);
+      newEntries = newEntries.concat(entries);
+    } catch (err) {
+      warnings.push(file.name + ': Error - ' + err.message);
+    }
+  }
+
+  if (!newEntries.length) {
+    showMsg('No data could be extracted.\n' + warnings.join('\n'), 'error');
+    processBtn.disabled = false;
+    return;
+  }
+
+  const merged = fullHistory.concat(newEntries);
+  computeCapitalGains(merged);
+
+  try {
+    const saveResult = await callRpc('cn_replace_all_transactions', { p_token: sessionToken, p_rows: merged });
+    if (!saveResult.success) {
+      showMsg('Error saving: ' + saveResult.message, 'error');
+    } else {
+      let msg = 'Saved successfully. ' + newEntries.length + ' new row(s) added.';
+      if (warnings.length) msg += '\n\nPlease check manually:\n' + warnings.join('\n');
+      showMsg(msg, warnings.length ? 'info' : 'success');
+      fileInput.value = '';
+      await loadHistory();
+    }
+  } catch (err) {
+    showMsg('Error saving: ' + err.message, 'error');
+  }
+
+  processBtn.disabled = false;
+}
+
+function downloadExcel() {
+  const headers = ['Date', 'Script Name', 'ISIN', 'Buy/Sell', 'Quantity', 'Net Amount', 'Charges', 'Capital Gain', 'Remarks', 'Source File'];
+  const sorted = fullHistory.slice().sort((a, b) => (a.trade_date || '').localeCompare(b.trade_date || ''));
+  const data = sorted.map(e => [
+    e.trade_date, e.script_name, e.isin, e.buy_sell, e.quantity,
+    e.net_amount, e.charges, e.capital_gain, e.remarks, e.source_file
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  ws['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 15 }, { wch: 9 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 38 }, { wch: 40 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Contract Notes');
+  XLSX.writeFile(wb, 'Contract_Notes_Summary.xlsx');
+}
+
 async function logout() {
-  const token = localStorage.getItem("cn_token");
-  try { await callRpc("cn_logout", { p_token: token }); } catch (e) {}
-  localStorage.removeItem("cn_token");
-  localStorage.removeItem("cn_email");
-  window.location.href = "index.html";
+  try { await callRpc('cn_logout', { p_token: sessionToken }); } catch (e) {}
+  localStorage.removeItem('cn_token');
+  localStorage.removeItem('cn_email');
+  window.location.href = 'index.html';
 }
 
 init();
