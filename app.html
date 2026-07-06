@@ -398,6 +398,10 @@ function renderSummary() {
   summaryBox.textContent = fullHistory.length + ' total transaction row(s) saved in your account.';
 }
 
+function entryKey(e) {
+  return [e.trade_date, e.isin, e.buy_sell, e.quantity, e.net_amount, e.source_file].join('|');
+}
+
 async function processFiles() {
   const fileInput = document.getElementById('fileInput');
   const files = fileInput.files;
@@ -426,7 +430,27 @@ async function processFiles() {
     return;
   }
 
-  const merged = fullHistory.concat(newEntries);
+  const existingKeys = new Set(fullHistory.map(entryKey));
+  const seenInBatch = new Set();
+  let duplicateCount = 0;
+  const dedupedNewEntries = [];
+  for (const e of newEntries) {
+    const key = entryKey(e);
+    if (existingKeys.has(key) || seenInBatch.has(key)) {
+      duplicateCount++;
+      continue;
+    }
+    seenInBatch.add(key);
+    dedupedNewEntries.push(e);
+  }
+
+  if (!dedupedNewEntries.length) {
+    showMsg('All rows in this upload already exist in your history — nothing new to add.' + (warnings.length ? '\n' + warnings.join('\n') : ''), 'info');
+    processBtn.disabled = false;
+    return;
+  }
+
+  const merged = fullHistory.concat(dedupedNewEntries);
   computeCapitalGains(merged);
 
   try {
@@ -434,7 +458,8 @@ async function processFiles() {
     if (!saveResult.success) {
       showMsg('Error saving: ' + saveResult.message, 'error');
     } else {
-      let msg = 'Saved successfully. ' + newEntries.length + ' new row(s) added.';
+      let msg = 'Saved successfully. ' + dedupedNewEntries.length + ' new row(s) added.';
+      if (duplicateCount) msg += ' ' + duplicateCount + ' duplicate row(s) skipped.';
       if (warnings.length) msg += '\n\nPlease check manually:\n' + warnings.join('\n');
       showMsg(msg, warnings.length ? 'info' : 'success');
       fileInput.value = '';
