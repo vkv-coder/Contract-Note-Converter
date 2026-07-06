@@ -38,118 +38,103 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-window.addEventListener("error", function (e) {
-  var box = document.getElementById("msgBox");
-  if (box) {
-    box.textContent = "A technical error occurred: " + e.message;
-    box.className = "msg error";
-  }
-});
-
 const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
+
+async function callRpc(fnName, payload) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fnName, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Server error (" + res.status + "): " + text);
+  }
+  return res.json();
+}
 
 const form = document.getElementById("authForm");
 const formTitle = document.getElementById("formTitle");
 const submitBtn = document.getElementById("submitBtn");
 const toggleText = document.getElementById("toggleText");
 const msgBox = document.getElementById("msgBox");
+let mode = "login";
 
 function showMsg(text, type) {
   msgBox.textContent = text;
   msgBox.className = "msg " + type;
 }
 
-if (!window.supabase || !window.supabase.createClient) {
-  showMsg("Could not load required library. Please check your internet connection and refresh the page.", "error");
-} else {
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  let mode = "login";
+function attachToggleHandler() {
+  document.getElementById("toggleLink").addEventListener("click", handleToggleClick);
+}
 
-  function attachToggleHandler() {
-    const link = document.getElementById("toggleLink");
-    link.addEventListener("click", handleToggleClick);
-  }
-
-  function handleToggleClick() {
-    mode = mode === "login" ? "signup" : "login";
-    if (mode === "signup") {
-      formTitle.textContent = "Sign Up";
-      submitBtn.textContent = "Sign Up";
-      toggleText.innerHTML = 'Already have an account? <a id="toggleLink">Log In</a>';
-    } else {
-      formTitle.textContent = "Log In";
-      submitBtn.textContent = "Log In";
-      toggleText.innerHTML = 'Don\'t have an account? <a id="toggleLink">Sign Up</a>';
-    }
-    attachToggleHandler();
-    msgBox.className = "msg";
+function handleToggleClick() {
+  mode = mode === "login" ? "signup" : "login";
+  if (mode === "signup") {
+    formTitle.textContent = "Sign Up";
+    submitBtn.textContent = "Sign Up";
+    toggleText.innerHTML = 'Already have an account? <a id="toggleLink">Log In</a>';
+  } else {
+    formTitle.textContent = "Log In";
+    submitBtn.textContent = "Log In";
+    toggleText.innerHTML = 'Don\'t have an account? <a id="toggleLink">Sign Up</a>';
   }
   attachToggleHandler();
+  msgBox.className = "msg";
+}
+attachToggleHandler();
 
-  async function checkApprovalAndRedirect(userId) {
-    const { data, error } = await supabase
-      .from("cn_profiles")
-      .select("status")
-      .eq("id", userId)
-      .single();
+form.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
 
-    if (error || !data) {
-      showMsg("Could not verify account status: " + (error ? error.message : "no profile found"), "error");
-      return;
-    }
-    if (data.status === "approved") {
-      window.location.href = "app.html";
-    } else if (data.status === "pending") {
-      window.location.href = "pending.html";
-    } else {
-      showMsg("Your account access was rejected. Contact support: vkvcoder.support@gmail.com", "error");
-    }
+  if (!email || !password) {
+    showMsg("Please enter both email and password.", "error");
+    return;
   }
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
-    e.stopPropagation();
+  submitBtn.disabled = true;
+  showMsg("Please wait...", "success");
 
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-
-    if (!email || !password) {
-      showMsg("Please enter both email and password.", "error");
-      return;
-    }
-
-    submitBtn.disabled = true;
-    showMsg("Please wait...", "success");
-
-    try {
-      if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email: email, password: password });
-        if (error) {
-          showMsg(error.message, "error");
-        } else {
-          showMsg("Account created! Redirecting to approval page...", "success");
-          setTimeout(function () { window.location.href = "pending.html"; }, 1200);
-        }
+  try {
+    if (mode === "signup") {
+      const result = await callRpc("cn_signup", { p_email: email, p_password: password });
+      if (!result.success) {
+        showMsg(result.message, "error");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: password });
-        if (error) {
-          showMsg(error.message, "error");
+        showMsg("Account created! Redirecting...", "success");
+        setTimeout(function () { window.location.href = "pending.html"; }, 1000);
+      }
+    } else {
+      const result = await callRpc("cn_login", { p_email: email, p_password: password });
+      if (!result.success) {
+        showMsg(result.message, "error");
+      } else {
+        localStorage.setItem("cn_token", result.token);
+        localStorage.setItem("cn_email", result.email);
+        if (result.status === "approved") {
+          window.location.href = "app.html";
+        } else if (result.status === "pending") {
+          window.location.href = "pending.html";
         } else {
-          showMsg("Login successful. Checking approval status...", "success");
-          await checkApprovalAndRedirect(data.user.id);
+          showMsg("Your account access was rejected. Contact support: vkvcoder.support@gmail.com", "error");
         }
       }
-    } catch (err) {
-      showMsg("Unexpected error: " + err.message, "error");
     }
+  } catch (err) {
+    showMsg(err.message, "error");
+  }
 
-    submitBtn.disabled = false;
-    return false;
-  });
-}
+  submitBtn.disabled = false;
+});
 </script>
 
 </body>

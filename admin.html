@@ -29,67 +29,81 @@
   <div class="card" id="content">Loading...</div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 const SUPABASE_URL = "https://jqqnnkzozjskziaizajg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxcW5ua3pvempza3ppYWl6YWpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Mjk1ODAsImV4cCI6MjA4ODUwNTU4MH0.sEYeWnm0dvuw8bLSVnQhqmgV8LB-pELjpuVIa3Us1Gg";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const ADMIN_EMAIL = "unigoods2026@gmail.com";
 const content = document.getElementById("content");
 
+async function callRpc(fnName, payload) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fnName, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Server error (" + res.status + "): " + text);
+  }
+  return res.json();
+}
+
 async function loadUsers() {
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user || user.email !== ADMIN_EMAIL) {
-    content.innerHTML = '<div class="denied">Access denied. This page is for admin use only.<br><br><a href="index.html">Go to Login</a></div>';
+  const token = localStorage.getItem("cn_token");
+  if (!token) {
+    content.innerHTML = '<div class="denied">Please <a href="index.html">log in</a> first.</div>';
     return;
   }
 
-  const { data, error } = await sb
-    .from("cn_profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
+  try {
+    const result = await callRpc("cn_admin_get_users", { p_token: token });
+    if (!result.success) {
+      content.innerHTML = '<div class="denied">Access denied. This page is for admin use only.<br><br><a href="index.html">Go to Login</a></div>';
+      return;
+    }
 
-  if (error) {
-    content.innerHTML = "Error loading users: " + error.message;
-    return;
+    if (!result.users.length) {
+      content.innerHTML = "No users found.";
+      return;
+    }
+
+    let rows = result.users.map(u => `
+      <tr>
+        <td>${u.email}</td>
+        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+        <td><span class="status ${u.status}">${u.status}</span></td>
+        <td>
+          ${u.status !== 'approved' ? `<button class="approve" onclick="updateStatus('${u.id}','approved')">Approve</button>` : ''}
+          ${u.status !== 'rejected' ? `<button class="reject" onclick="updateStatus('${u.id}','rejected')">Reject</button>` : ''}
+        </td>
+      </tr>
+    `).join("");
+
+    content.innerHTML = `
+      <table>
+        <tr><th>Email</th><th>Signed Up</th><th>Status</th><th>Action</th></tr>
+        ${rows}
+      </table>
+    `;
+  } catch (err) {
+    content.innerHTML = "Error: " + err.message;
   }
-
-  if (!data.length) {
-    content.innerHTML = "No users found.";
-    return;
-  }
-
-  let rows = data.map(u => `
-    <tr>
-      <td>${u.email}</td>
-      <td>${new Date(u.created_at).toLocaleDateString()}</td>
-      <td><span class="status ${u.status}">${u.status}</span></td>
-      <td>
-        ${u.status !== 'approved' ? `<button class="approve" onclick="updateStatus('${u.id}','approved')">Approve</button>` : ''}
-        ${u.status !== 'rejected' ? `<button class="reject" onclick="updateStatus('${u.id}','rejected')">Reject</button>` : ''}
-      </td>
-    </tr>
-  `).join("");
-
-  content.innerHTML = `
-    <table>
-      <tr><th>Email</th><th>Signed Up</th><th>Status</th><th>Action</th></tr>
-      ${rows}
-    </table>
-  `;
 }
 
 async function updateStatus(userId, status) {
-  const { data: { user } } = await sb.auth.getUser();
-  const { error } = await sb
-    .from("cn_profiles")
-    .update({ status, approved_by: user.id, approved_at: new Date().toISOString() })
-    .eq("id", userId);
-
-  if (error) {
-    alert("Error: " + error.message);
-  } else {
-    loadUsers();
+  const token = localStorage.getItem("cn_token");
+  try {
+    const result = await callRpc("cn_admin_update_status", { p_token: token, p_target_user_id: userId, p_new_status: status });
+    if (!result.success) {
+      alert(result.message || "Error updating status.");
+    } else {
+      loadUsers();
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
   }
 }
 
