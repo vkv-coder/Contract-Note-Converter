@@ -21,6 +21,7 @@ begin
         body := jsonb_build_object(
           'action', 'sendEmail',
           'to', NEW.email,
+          'fromName', 'Contract Note Converter',
           'subject', 'Your Contract Note Converter account is approved',
           'html', '<p>Hi,</p>'
             || '<p>Your account on <b>Contract Note Converter</b> has been approved. You can now log in and start using the app:</p>'
